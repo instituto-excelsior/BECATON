@@ -68,7 +68,10 @@
     z-index: 0; opacity: 0.6;
   }
   .ring-inner { position: absolute; inset: -5px; border-radius: 50%; background: var(--navy); z-index: 1; }
-  .pointer { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); z-index: 15; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5)); }
+  .pointer {
+    position: absolute; top: -16px; left: 50%; transform: translateX(-50%); z-index: 15;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+  }
   .pointer svg { display: block; }
   #wheel {
     border-radius: 50%; display: block; width: 100%; height: 100%; position: relative; z-index: 2;
@@ -103,12 +106,13 @@
   .spin-btn:active:not(:disabled) { transform: translateY(1px); }
   .spin-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  .loading-msg {
-    display: none; margin-top: clamp(14px,3vw,26px);
-    font-size: clamp(0.7rem,2vw,0.85rem); font-weight: 600; letter-spacing: 0.2em;
-    text-transform: uppercase; color: rgba(244,247,251,0.35);
+  .status-msg {
+    margin-top: clamp(14px,3vw,26px);
+    font-size: clamp(0.7rem,2vw,0.85rem); font-weight: 600; letter-spacing: 0.15em;
+    text-transform: uppercase; color: rgba(244,247,251,0.35); text-align: center;
+    display: none;
   }
-  .loading-msg.show { display: block; }
+  .status-msg.show { display: block; }
 
   .empty-msg {
     display: none; margin-top: clamp(10px,3vw,20px);
@@ -240,7 +244,7 @@
 </div>
 
 <button class="spin-btn" id="spinBtn" onclick="spin()" style="display:none">¡ GIRAR !</button>
-<div class="loading-msg show" id="loadingMsg">Cargando…</div>
+<div class="status-msg show" id="statusMsg">Cargando…</div>
 <div class="empty-msg" id="emptyMsg">✦ Todos los descuentos han sido otorgados ✦</div>
 
 <div class="already-used" id="alreadyUsed">
@@ -265,10 +269,14 @@
 </div>
 
 <script>
-// ── Keys ─────────────────────────────────────────────────────────
-const SHARED_KEY   = 'becaton-counts-2025';
-const PERSONAL_KEY = 'becaton_spun_2025';
+// ════════════════════════════════════════════════════════════════
+//  ⚙️  CONFIGURACIÓN — Solo edita estas 2 líneas
+// ════════════════════════════════════════════════════════════════
+const JSONBIN_ID  = '69a74c80ae596e708f5c1eed';          // ← pega el Bin ID
+const JSONBIN_KEY = '$2a$10$wynOGITmtRYAv20OcXiSbOe/HL5h4mWXHNHPZUtNcQquru9hM/ZKy';          // ← pega la Master Key (empieza con $2b$...)
+// ════════════════════════════════════════════════════════════════
 
+const PERSONAL_KEY   = 'becaton_spun_2025';
 const PERCENTAGES    = [10, 15, 20, 25, 30];
 const DEFAULT_COUNTS = { 10:5, 15:5, 20:5, 25:5, 30:5 };
 
@@ -277,16 +285,35 @@ function hasSpun()         { try { return !!localStorage.getItem(PERSONAL_KEY); 
 function savePersonal(pct) { try { localStorage.setItem(PERSONAL_KEY, String(pct)); } catch(e) {} }
 function getPersonal()     { try { return localStorage.getItem(PERSONAL_KEY); } catch(e) { return null; } }
 
-// ── Shared storage helpers ───────────────────────────────────────
+// ── JSONBin helpers ──────────────────────────────────────────────
+const BIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
+const HEADERS = {
+  'Content-Type': 'application/json',
+  'X-Master-Key': JSONBIN_KEY,
+  'X-Bin-Versioning': 'false'   // no guardamos historial de versiones
+};
+
 async function loadCounts() {
   try {
-    const res = await window.storage.get(SHARED_KEY, true);
-    if (res && res.value) return JSON.parse(res.value);
-  } catch(e) {}
-  return { ...DEFAULT_COUNTS };
+    const r = await fetch(BIN_URL, { headers: HEADERS });
+    const j = await r.json();
+    return j.record || { ...DEFAULT_COUNTS };
+  } catch(e) {
+    console.warn('loadCounts error', e);
+    return { ...DEFAULT_COUNTS };
+  }
 }
+
 async function saveCounts(counts) {
-  try { await window.storage.set(SHARED_KEY, JSON.stringify(counts), true); } catch(e) {}
+  try {
+    await fetch(BIN_URL, {
+      method: 'PUT',
+      headers: HEADERS,
+      body: JSON.stringify(counts)
+    });
+  } catch(e) {
+    console.warn('saveCounts error', e);
+  }
 }
 
 // ── Canvas ───────────────────────────────────────────────────────
@@ -310,10 +337,10 @@ const PCT_COLORS = {
 
 function buildSegments(counts) {
   let arr = [];
-  PERCENTAGES.forEach(p => { for(let i=0; i<(counts[p]||0); i++) arr.push(p); });
-  for(let i=arr.length-1; i>0; i--) {
-    const j = Math.floor(Math.random()*(i+1));
-    [arr[i],arr[j]] = [arr[j],arr[i]];
+  PERCENTAGES.forEach(p => { for(let i = 0; i < (counts[p] || 0); i++) arr.push(p); });
+  for(let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
 }
@@ -321,10 +348,10 @@ function buildSegments(counts) {
 function drawWheel(angle) {
   const S = wheelCanvas.width;
   const cx = S/2, cy = S/2, r = S/2 - 3;
-  ctx.clearRect(0,0,S,S);
+  ctx.clearRect(0, 0, S, S);
 
   if (segments.length === 0) {
-    ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI);
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI);
     ctx.fillStyle = '#0B1F3A'; ctx.fill();
     ctx.strokeStyle = 'rgba(212,168,75,0.4)'; ctx.lineWidth = 3; ctx.stroke();
     ctx.fillStyle = 'rgba(244,247,251,0.35)';
@@ -335,45 +362,52 @@ function drawWheel(angle) {
   }
 
   const total = segments.length;
-  const arc = (2*Math.PI)/total;
+  const arc = (2 * Math.PI) / total;
   const fsize = Math.max(9, Math.min(16, S * 0.038));
 
-  for(let i=0; i<total; i++) {
-    const sa = angle + i*arc, ea = sa + arc;
+  for(let i = 0; i < total; i++) {
+    const sa = angle + i * arc, ea = sa + arc;
     const pct = segments[i];
     const pair = PCT_COLORS[pct] || ['#1A3F6F','#2A5FA0'];
-    const gx = cx + Math.cos(sa+arc/2)*r*0.5;
-    const gy = cy + Math.sin(sa+arc/2)*r*0.5;
-    const grad = ctx.createRadialGradient(cx,cy,0,gx,gy,r);
+    const gx = cx + Math.cos(sa + arc/2) * r * 0.5;
+    const gy = cy + Math.sin(sa + arc/2) * r * 0.5;
+    const grad = ctx.createRadialGradient(cx, cy, 0, gx, gy, r);
     grad.addColorStop(0, pair[1]); grad.addColorStop(1, pair[0]);
 
-    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,sa,ea); ctx.closePath();
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, sa, ea); ctx.closePath();
     ctx.fillStyle = grad; ctx.fill();
     ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.stroke();
 
-    ctx.save(); ctx.translate(cx,cy); ctx.rotate(sa+arc/2);
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(sa + arc/2);
     ctx.textAlign = 'right'; ctx.fillStyle = '#FFFFFF';
     ctx.font = `900 ${fsize}px Montserrat`;
     ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 4;
-    ctx.fillText(pct+'%', r-9, fsize*0.38);
+    ctx.fillText(pct + '%', r - 9, fsize * 0.38);
     ctx.restore();
   }
 
-  ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI);
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI);
   ctx.strokeStyle = 'rgba(212,168,75,0.7)'; ctx.lineWidth = 3; ctx.stroke();
-  ctx.beginPath(); ctx.arc(cx,cy,r*0.18,0,2*Math.PI);
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.18, 0, 2*Math.PI);
   ctx.fillStyle = '#0B1F3A'; ctx.fill();
   ctx.strokeStyle = 'rgba(212,168,75,0.3)'; ctx.lineWidth = 1; ctx.stroke();
 }
 
+function setStatus(msg) {
+  const el = document.getElementById('statusMsg');
+  if (msg) { el.textContent = msg; el.classList.add('show'); }
+  else { el.classList.remove('show'); }
+}
+
 // ── Init ─────────────────────────────────────────────────────────
 async function init() {
+  setStatus('Cargando…');
+
   if (hasSpun()) {
-    // Already played — show result, draw wheel in bg
     const counts = await loadCounts();
     segments = buildSegments(counts);
     drawWheel(currentAngle);
-    document.getElementById('loadingMsg').classList.remove('show');
+    setStatus('');
     showAlreadyUsed();
     return;
   }
@@ -381,9 +415,9 @@ async function init() {
   const counts = await loadCounts();
   segments = buildSegments(counts);
   drawWheel(currentAngle);
-  document.getElementById('loadingMsg').classList.remove('show');
+  setStatus('');
 
-  const total = Object.values(counts).reduce((a,b)=>a+b,0);
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
   if (total === 0) {
     document.getElementById('emptyMsg').style.display = 'block';
   } else {
@@ -394,7 +428,7 @@ async function init() {
 function showAlreadyUsed() {
   const saved = getPersonal();
   document.getElementById('spinBtn').style.display = 'none';
-  document.getElementById('alreadyDiscount').textContent = saved ? saved+'%' : '—';
+  document.getElementById('alreadyDiscount').textContent = saved ? saved + '%' : '—';
   document.getElementById('alreadyUsed').classList.add('show');
 }
 
@@ -408,15 +442,15 @@ function spin() {
   spinning = true;
   document.getElementById('spinBtn').disabled = true;
 
-  const extraSpins = (6 + Math.floor(Math.random()*5)) * 2 * Math.PI;
+  const extraSpins = (6 + Math.floor(Math.random() * 5)) * 2 * Math.PI;
   const randomStop = Math.random() * 2 * Math.PI;
   const totalRot = extraSpins + randomStop;
   const duration = 4500 + Math.random() * 2000;
   const t0 = performance.now(), a0 = currentAngle;
 
-  function ease(t) { return 1 - Math.pow(1-t, 4); }
+  function ease(t) { return 1 - Math.pow(1 - t, 4); }
   function frame(now) {
-    const t = Math.min((now-t0)/duration, 1);
+    const t = Math.min((now - t0) / duration, 1);
     currentAngle = a0 + totalRot * ease(t);
     drawWheel(currentAngle);
     if (t < 1) requestAnimationFrame(frame);
@@ -427,21 +461,21 @@ function spin() {
 
 async function resolveResult() {
   const total = segments.length;
-  const arc = (2*Math.PI)/total;
+  const arc = (2 * Math.PI) / total;
   const norm = ((currentAngle % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
   const adj  = ((3*Math.PI/2) - norm + 2*Math.PI) % (2*Math.PI);
-  const wonIndex = Math.floor(adj/arc) % total;
+  const wonIndex = Math.floor(adj / arc) % total;
   const won = segments[wonIndex];
 
-  // Save locally first (device won't spin again)
+  // 1. Guardar en dispositivo (ya no podrá girar)
   savePersonal(won);
 
-  // Decrement shared count
+  // 2. Descontar del contador global en JSONBin
   const counts = await loadCounts();
   if (counts[won] > 0) counts[won]--;
   await saveCounts(counts);
 
-  // Redraw with updated segments
+  // 3. Redibujar con conteos actualizados
   segments = buildSegments(counts);
   drawWheel(currentAngle);
 
@@ -467,34 +501,34 @@ resizeConf(); window.addEventListener('resize', resizeConf);
 
 function mkP(y) {
   return {
-    x: Math.random()*confCanvas.width, y: y??-10,
-    w: 6+Math.random()*10, h: 3+Math.random()*5,
-    color: CONF_COLORS[Math.floor(Math.random()*CONF_COLORS.length)],
-    speed: 2+Math.random()*5, angle: Math.random()*Math.PI*2,
-    spin: (Math.random()-.5)*.2, drift: (Math.random()-.5)*2,
+    x: Math.random() * confCanvas.width, y: y ?? -10,
+    w: 6 + Math.random() * 10, h: 3 + Math.random() * 5,
+    color: CONF_COLORS[Math.floor(Math.random() * CONF_COLORS.length)],
+    speed: 2 + Math.random() * 5, angle: Math.random() * Math.PI * 2,
+    spin: (Math.random() - .5) * .2, drift: (Math.random() - .5) * 2,
   };
 }
 function startConfetti() {
   confRunning = true; confParticles = [];
-  for(let i=0;i<180;i++) confParticles.push(mkP(Math.random()*confCanvas.height*0.5));
+  for(let i = 0; i < 180; i++) confParticles.push(mkP(Math.random() * confCanvas.height * 0.5));
   loopConf();
 }
 function stopConfetti() {
   confRunning = false;
-  confCtx.clearRect(0,0,confCanvas.width,confCanvas.height);
+  confCtx.clearRect(0, 0, confCanvas.width, confCanvas.height);
   confParticles = [];
 }
 function loopConf() {
   if(!confRunning) return;
-  confCtx.clearRect(0,0,confCanvas.width,confCanvas.height);
-  if(confParticles.length < 220) for(let i=0;i<5;i++) confParticles.push(mkP());
+  confCtx.clearRect(0, 0, confCanvas.width, confCanvas.height);
+  if(confParticles.length < 220) for(let i = 0; i < 5; i++) confParticles.push(mkP());
   confParticles.forEach(p => {
-    p.y+=p.speed; p.x+=p.drift; p.angle+=p.spin;
-    confCtx.save(); confCtx.translate(p.x,p.y); confCtx.rotate(p.angle);
-    confCtx.fillStyle=p.color; confCtx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+    p.y += p.speed; p.x += p.drift; p.angle += p.spin;
+    confCtx.save(); confCtx.translate(p.x, p.y); confCtx.rotate(p.angle);
+    confCtx.fillStyle = p.color; confCtx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
     confCtx.restore();
   });
-  confParticles = confParticles.filter(p=>p.y<confCanvas.height+20);
+  confParticles = confParticles.filter(p => p.y < confCanvas.height + 20);
   requestAnimationFrame(loopConf);
 }
 
