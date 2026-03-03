@@ -82,7 +82,6 @@
     color: rgba(244,247,251,0.45);
   }
 
-  /* Red accent bar */
   .accent-bar {
     width: clamp(50px, 14vw, 90px);
     height: 3px;
@@ -91,7 +90,6 @@
     border-radius: 2px;
   }
 
-  /* ── Cross icon (enfermería) ── */
   .cross-icon {
     display: inline-block;
     width: clamp(18px, 4vw, 28px);
@@ -118,7 +116,6 @@
     flex-shrink: 0;
   }
 
-  /* Decorative outer ring */
   .ring-outer {
     position: absolute;
     inset: -10px;
@@ -227,7 +224,44 @@
     padding: 0 16px;
   }
 
-  /* Tagline at bottom */
+  /* ── Already used screen ── */
+  .already-used {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: clamp(14px, 3vw, 26px);
+    text-align: center;
+  }
+  .already-used.show { display: flex; }
+
+  .already-title {
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-size: clamp(1rem, 4vw, 1.4rem);
+    color: var(--white);
+    letter-spacing: 0.04em;
+  }
+
+  .already-discount {
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-size: clamp(3rem, 14vw, 5rem);
+    line-height: 1;
+    background: linear-gradient(135deg, #D4A84B 0%, #F5D07A 40%, #D4A84B 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .already-sub {
+    font-size: clamp(0.6rem, 1.8vw, 0.72rem);
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(244,247,251,0.4);
+  }
+
   .tagline {
     margin-top: clamp(8px, 2vw, 16px);
     font-size: clamp(0.48rem, 1.5vw, 0.62rem);
@@ -409,18 +443,13 @@
 <div class="wheel-wrapper">
   <div class="ring-outer"></div>
   <div class="ring-inner"></div>
-
-  <!-- Pointer -->
   <div class="pointer">
     <svg width="28" height="36" viewBox="0 0 28 36">
       <polygon points="14,0 28,28 20,28 20,36 8,36 8,28 0,28" fill="#D4A84B"/>
       <polygon points="14,4 25,27 3,27" fill="#F5D07A" opacity="0.5"/>
     </svg>
   </div>
-
   <canvas id="wheel"></canvas>
-
-  <!-- Center -->
   <div class="center-btn">
     <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
       <path d="M12 2v20M2 12h20" stroke-linecap="round"/>
@@ -430,6 +459,13 @@
 
 <button class="spin-btn" id="spinBtn" onclick="spin()">¡ GIRAR !</button>
 <div class="empty-msg" id="emptyMsg">✦ Todos los descuentos han sido otorgados ✦</div>
+
+<!-- Already used block -->
+<div class="already-used" id="alreadyUsed">
+  <div class="already-title">¡Felicidades!</div>
+  <div class="already-discount" id="alreadyDiscount">—</div>
+  <div class="already-sub">de descuento</div>
+</div>
 
 <div class="tagline">Profesionales al servicio de la vida</div>
 
@@ -448,6 +484,19 @@
 </div>
 
 <script>
+// ── ONE-SPIN-PER-DEVICE via localStorage ────────────────────────
+const STORAGE_KEY = 'becaton_spun_2025';
+
+function hasAlreadySpun() {
+  try { return !!localStorage.getItem(STORAGE_KEY); } catch(e) { return false; }
+}
+function markAsSpun(discount) {
+  try { localStorage.setItem(STORAGE_KEY, String(discount)); } catch(e) {}
+}
+function getSavedDiscount() {
+  try { return localStorage.getItem(STORAGE_KEY); } catch(e) { return null; }
+}
+
 // ── Canvas setup ────────────────────────────────────────────────
 const wheelCanvas = document.getElementById('wheel');
 const ctx = wheelCanvas.getContext('2d');
@@ -479,14 +528,6 @@ function buildSegments() {
 }
 let segments = buildSegments();
 
-// ── Color palette – navy/blue/red/gold institutional ──────────
-// Alternating colors to differentiate segments clearly
-const SEG_COLORS = [
-  '#1A3F6F','#C0212B','#1E5799','#9B1B2A','#0F3460',
-  '#A01823','#14366A','#B52030','#163258','#8C1520',
-  '#1B4780','#D4262F','#234E8C','#B8232C','#0D2857',
-];
-// Each percentage always gets same color family
 const PCT_COLORS = {
   10: ['#1A3F6F','#2A5FA0'],
   15: ['#C0212B','#E03040'],
@@ -535,7 +576,6 @@ function drawWheel(angle) {
     const ea = sa + arc;
     const pct = segments[i];
 
-    // Gradient fill
     const gx = cx + Math.cos(sa + arc/2) * r * 0.5;
     const gy = cy + Math.sin(sa + arc/2) * r * 0.5;
     const grad = ctx.createRadialGradient(cx, cy, 0, gx, gy, r);
@@ -554,7 +594,6 @@ function drawWheel(angle) {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Label
     ctx.save();
     ctx.translate(cx,cy);
     ctx.rotate(sa + arc/2);
@@ -567,14 +606,12 @@ function drawWheel(angle) {
     ctx.restore();
   }
 
-  // Gold outer ring
   ctx.beginPath();
   ctx.arc(cx,cy,r,0,2*Math.PI);
   ctx.strokeStyle = 'rgba(212,168,75,0.7)';
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // Inner subtle ring
   ctx.beginPath();
   ctx.arc(cx,cy,r*0.18,0,2*Math.PI);
   ctx.fillStyle = '#0B1F3A';
@@ -586,12 +623,29 @@ function drawWheel(angle) {
 
 drawWheel(currentAngle);
 
+// ── Check on load if already spun ──────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  if(hasAlreadySpun()) {
+    showAlreadyUsed();
+  }
+});
+
+function showAlreadyUsed() {
+  const saved = getSavedDiscount();
+  document.getElementById('spinBtn').style.display = 'none';
+  const alreadyBlock = document.getElementById('alreadyUsed');
+  const discountEl = document.getElementById('alreadyDiscount');
+  discountEl.textContent = saved ? saved + '%' : '—';
+  alreadyBlock.classList.add('show');
+}
+
 // ── Spin ─────────────────────────────────────────────────────────
 let spinning = false;
-let wonIndex = -1;
 
 function spin() {
   if(spinning || segments.length === 0) return;
+  if(hasAlreadySpun()) { showAlreadyUsed(); return; }
+
   spinning = true;
   document.getElementById('spinBtn').disabled = true;
 
@@ -619,10 +673,12 @@ function resolveResult() {
   const arc = (2*Math.PI)/total;
   const norm = ((currentAngle % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI);
   const adj = ((3*Math.PI/2) - norm + 2*Math.PI) % (2*Math.PI);
-  wonIndex = Math.floor(adj/arc) % total;
+  const wonIndex = Math.floor(adj/arc) % total;
   const won = segments[wonIndex];
 
-  // Remove segment + decrement count
+  // Save to localStorage BEFORE showing modal
+  markAsSpun(won);
+
   segments.splice(wonIndex, 1);
   counts[won]--;
   drawWheel(currentAngle);
@@ -635,12 +691,8 @@ function resolveResult() {
 function closeModal() {
   document.getElementById('modal').classList.remove('show');
   stopConfetti();
-  if(segments.length === 0) {
-    document.getElementById('spinBtn').style.display = 'none';
-    document.getElementById('emptyMsg').style.display = 'block';
-  } else {
-    document.getElementById('spinBtn').disabled = false;
-  }
+  // Always show locked state after closing
+  showAlreadyUsed();
 }
 
 // ── Confetti ────────────────────────────────────────────────────
